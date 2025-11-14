@@ -5,7 +5,7 @@ RSpec.describe Zenspec do
     expect(Zenspec::VERSION).not_to be nil
   end
 
-  it "does something useful" do
-    expect(false).to eq(true)
+  it "loads matchers module" do
+    expect(Zenspec::Matchers).to be_a(Module)
   end
 end
