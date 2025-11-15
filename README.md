@@ -27,6 +27,7 @@ gem install zenspec
 - **GraphQL Matchers** - Test GraphQL queries, mutations, types, and schemas
 - **Interactor Matchers** - Test service objects with clean syntax
 - **GraphQL Helpers** - Execute queries and mutations with ease
+- **Progress Loader** - Docker-style progress bars for terminal output
 - **Shoulda Matchers** - Automatically configured for Rails models and controllers
 - **Rails Integration** - Automatically loads in Rails applications
 - **Non-Rails Support** - Works in any Ruby project
@@ -38,6 +39,111 @@ gem install zenspec
 require "zenspec"
 
 # Everything is automatically configured!
+```
+
+---
+
+## Progress Loader
+
+Docker-style progress bars for displaying terminal progress.
+
+### RSpec Formatters
+
+Zenspec includes two custom RSpec formatters for displaying test progress:
+
+#### Progress Bar Formatter (Recommended)
+
+Clean, colorful output with status icons:
+
+```bash
+# Use the progress bar formatter
+rspec --require zenspec/formatters/progress_bar_formatter \
+      --format ProgressBarFormatter
+
+# Or add to .rspec file:
+# --require zenspec/formatters/progress_bar_formatter
+# --format ProgressBarFormatter
+```
+
+Output example:
+```
+✔ user_spec.rb creates a new user successfully                        [10% 1/10]
+✔ user_spec.rb validates email presence                               [20% 2/10]
+⠿ user_spec.rb --> sends welcome email                                [30% 3/10]
+✗ post_spec.rb publishes post with valid data                         [40% 4/10]
+⊘ auth_spec.rb authenticates with OAuth                               [50% 5/10]
+```
+
+Format:
+- **Running tests** show an arrow (-->) between filename and description
+- **Completed tests** (passed/failed/pending) show only a space between filename and description
+
+Colors:
+- **Green** ✔ - Passed tests
+- **Red** ✗ - Failed tests
+- **Yellow** ⠿ - Currently running test (with arrow)
+- **Cyan** ⊘ - Pending/skipped tests
+
+#### Docker-Style Progress Formatter
+
+Alternative formatter with Docker-style progress bars:
+
+```bash
+# Use the Docker-style formatter
+rspec --require zenspec/formatters/progress_formatter \
+      --format Zenspec::Formatters::ProgressFormatter
+```
+
+Output example:
+```
+[=====================>            ] 65% 13/20 spec/models/user_spec.rb:42
+```
+
+### Programmatic Usage
+
+Use the progress loader in your code:
+
+```ruby
+# Basic usage
+loader = Zenspec::ProgressLoader.new(total: 100, description: "Processing files")
+
+100.times do |i|
+  # Do some work...
+  loader.update(i + 1, description: "Processing file #{i + 1}/100")
+  sleep(0.1)
+end
+
+loader.finish(description: "Processing complete!")
+```
+
+### Custom Width
+
+```ruby
+# Custom progress bar width (default is 40)
+loader = Zenspec::ProgressLoader.new(
+  total: 50,
+  width: 60,
+  description: "Downloading layers"
+)
+
+loader.increment(description: "Layer 1/50")
+loader.increment(description: "Layer 2/50")
+# ...
+loader.finish
+```
+
+### Time Estimates
+
+The progress loader automatically calculates and displays time information:
+
+```ruby
+loader = Zenspec::ProgressLoader.new(total: 1000)
+
+loader.update(250)
+# Output: [==========>                     ] 25% 250/1000 1s/4s
+
+loader.update(500)
+# Output: [====================>           ] 50% 500/1000 2s/4s
 ```
 
 ---

@@ -4,6 +4,7 @@ require_relative "zenspec/version"
 require_relative "zenspec/matchers"
 require_relative "zenspec/helpers"
 require_relative "zenspec/shoulda_config"
+require_relative "zenspec/progress_loader"
 
 # Load Railtie if Rails is available
 require_relative "zenspec/railtie" if defined?(Rails::Railtie)

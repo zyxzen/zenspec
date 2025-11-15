@@ -1,3 +1,4 @@
---format documentation
+--require zenspec/formatters/progress_bar_formatter
+--format ProgressBarFormatter
 --color
 --require spec_helper
