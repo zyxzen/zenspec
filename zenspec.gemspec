@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Runtime dependencies
-  spec.add_dependency "graphql", ">= 1.12"
+  spec.add_dependency "graphql", "~> 1.12"
   spec.add_dependency "interactor", "~> 3.0"
   spec.add_dependency "rspec", "~> 3.0"
   spec.add_dependency "shoulda-matchers", "~> 6.0"
