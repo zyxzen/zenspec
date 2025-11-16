@@ -56,14 +56,17 @@ module Zenspec
       # Spinner frames for animation
       SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"].freeze
 
-      # Spinner update interval in seconds
+      # Spinner update interval in seconds (80ms provides smooth 12.5 FPS animation)
       SPINNER_INTERVAL = 0.08
 
-      # Default terminal width if unable to detect
+      # Default terminal width if unable to detect (standard wide terminal)
       DEFAULT_TERMINAL_WIDTH = 120
 
-      # Minimum padding between left and right parts
+      # Minimum padding between left and right parts for readability
       MIN_PADDING = 2
+
+      # Pre-compiled regex for stripping ANSI color codes (performance optimization)
+      ANSI_REGEX = /\e\[[0-9;]*m/.freeze
 
       def initialize(output)
         super
@@ -338,8 +341,9 @@ module Zenspec
       end
 
       # Strip ANSI color codes from text
+      # Uses pre-compiled regex for performance in hot path
       def strip_ansi(text)
-        text.gsub(/\e\[[0-9;]*m/, "")
+        text.gsub(ANSI_REGEX, "")
       end
 
       # Extract short filename from example
@@ -430,4 +434,10 @@ module Zenspec
 end
 
 # Register the formatter as ProgressBarFormatter for easier use
-ProgressBarFormatter = Zenspec::Formatters::ProgressBarFormatter
+# Users can use the short form by requiring this file directly:
+#   --require zenspec/formatters/progress_bar_formatter
+#   --format ProgressBarFormatter
+# Or use the full constant name: Zenspec::Formatters::ProgressBarFormatter
+unless Object.const_defined?(:ProgressBarFormatter)
+  ProgressBarFormatter = Zenspec::Formatters::ProgressBarFormatter
+end

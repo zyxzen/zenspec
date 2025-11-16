@@ -141,7 +141,7 @@ module Zenspec
           end
 
           # Check exact value
-          if @expected_value
+          unless @expected_value.nil?
             data == @expected_value
           else
             !data.nil?
@@ -210,13 +210,15 @@ module Zenspec
       #
       # @example
       #   expect(result).to have_graphql_errors
+      #   expect(result).to have_graphql_errors(2)  # Exactly 2 errors
       #   expect(result).to have_graphql_error.with_message("Not found")
       #   expect(result).to have_graphql_error.with_extensions(code: "NOT_FOUND")
       #   expect(result).to have_graphql_error.at_path(["user", "email"])
       #   expect { execute_query }.to have_graphql_errors
       #
-      RSpec::Matchers.define :have_graphql_errors do
+      RSpec::Matchers.define :have_graphql_errors do |expected_count = nil|
         match do |result_or_block|
+          @expected_count = expected_count
           if result_or_block.is_a?(Proc)
             begin
               result_or_block.call
@@ -231,6 +233,12 @@ module Zenspec
             @result = result_or_block
             errors = result_or_block["errors"]
             return false if errors.nil? || (errors.is_a?(Array) && errors.empty?)
+
+            # Check for exact error count if specified
+            if @expected_count
+              @actual_count = errors.is_a?(Array) ? errors.length : 0
+              return false unless @actual_count == @expected_count
+            end
 
             # Check for specific message
             if @expected_message
@@ -269,6 +277,8 @@ module Zenspec
         failure_message do
           if @raised_error
             "expected no errors, but got: #{@error.message}"
+          elsif @expected_count
+            "expected exactly #{@expected_count} error(s), but got #{@actual_count}"
           elsif @expected_message
             errors = @result["errors"] || []
             messages = errors.map { |e| e["message"] }

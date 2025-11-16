@@ -9,8 +9,22 @@ module Zenspec
       module FieldNameHelper
         # Convert snake_case to camelCase for GraphQL field lookup
         # GraphQL-Ruby automatically converts snake_case field definitions to camelCase
+        #
+        # Handles edge cases:
+        # - Empty strings: "" -> ""
+        # - No underscores: "foo" -> "foo"
+        # - Leading underscores: "_foo_bar" -> "fooBar"
+        # - Trailing underscores: "foo_bar_" -> "fooBar"
+        # - Consecutive underscores: "foo__bar" -> "fooBar"
         def camelize(name)
-          name.to_s.split("_").map.with_index { |word, i| i.zero? ? word : word.capitalize }.join
+          str = name.to_s
+          return str if str.empty? || !str.include?("_")
+
+          # Split on underscores and reject empty parts (handles consecutive underscores)
+          parts = str.split("_").reject(&:empty?)
+          return str if parts.empty?
+
+          parts.map.with_index { |word, i| i.zero? ? word : word.capitalize }.join
         end
 
         # Try to get a field by name, attempting both the original name and camelCase version
@@ -57,6 +71,49 @@ module Zenspec
           end
 
           nil
+        end
+
+        # Shared type conversion methods to avoid duplication across matchers
+
+        # Convert a GraphQL type object to its string representation
+        # Handles NonNull (!), List ([]), and nested types
+        def type_to_string(type)
+          case type
+          when GraphQL::Schema::NonNull
+            "#{type_to_string(type.of_type)}!"
+          when GraphQL::Schema::List
+            "[#{type_to_string(type.of_type)}]"
+          when GraphQL::Schema::Member
+            type.graphql_name
+          else
+            # Handle wrapped types from graphql-ruby
+            if type.respond_to?(:unwrap)
+              unwrapped = type.unwrap
+              base_name = unwrapped.respond_to?(:graphql_name) ? unwrapped.graphql_name : unwrapped.to_s
+
+              # Build the type string with wrappers
+              result = base_name
+              result = "[#{result}]" if list?(type)
+              result = "#{result}!" if non_null?(type)
+              result
+            elsif type.respond_to?(:graphql_name)
+              type.graphql_name
+            else
+              type.to_s
+            end
+          end
+        end
+
+        # Check if a type is a List type
+        def list?(type)
+          type.is_a?(GraphQL::Schema::List) ||
+            (type.respond_to?(:list?) && type.list?)
+        end
+
+        # Check if a type is a NonNull type
+        def non_null?(type)
+          type.is_a?(GraphQL::Schema::NonNull) ||
+            (type.respond_to?(:non_null?) && type.non_null?)
         end
       end
 
@@ -124,43 +181,6 @@ module Zenspec
 
           type = field.type
           type_to_string(type)
-        end
-
-        def type_to_string(type)
-          case type
-          when GraphQL::Schema::NonNull
-            "#{type_to_string(type.of_type)}!"
-          when GraphQL::Schema::List
-            "[#{type_to_string(type.of_type)}]"
-          when GraphQL::Schema::Member
-            type.graphql_name
-          else
-            # Handle wrapped types from graphql-ruby
-            if type.respond_to?(:unwrap)
-              unwrapped = type.unwrap
-              base_name = unwrapped.respond_to?(:graphql_name) ? unwrapped.graphql_name : unwrapped.to_s
-
-              # Build the type string with wrappers
-              result = base_name
-              result = "[#{result}]" if list?(type)
-              result = "#{result}!" if non_null?(type)
-              result
-            elsif type.respond_to?(:graphql_name)
-              type.graphql_name
-            else
-              type.to_s
-            end
-          end
-        end
-
-        def list?(type)
-          type.is_a?(GraphQL::Schema::List) ||
-            (type.respond_to?(:list?) && type.list?)
-        end
-
-        def non_null?(type)
-          type.is_a?(GraphQL::Schema::NonNull) ||
-            (type.respond_to?(:non_null?) && type.non_null?)
         end
 
         def check_argument(arg_name, expected_type)
@@ -296,43 +316,6 @@ module Zenspec
           type = argument.type
           type_to_string(type)
         end
-
-        def type_to_string(type)
-          case type
-          when GraphQL::Schema::NonNull
-            "#{type_to_string(type.of_type)}!"
-          when GraphQL::Schema::List
-            "[#{type_to_string(type.of_type)}]"
-          when GraphQL::Schema::Member
-            type.graphql_name
-          else
-            # Handle wrapped types from graphql-ruby
-            if type.respond_to?(:unwrap)
-              unwrapped = type.unwrap
-              base_name = unwrapped.respond_to?(:graphql_name) ? unwrapped.graphql_name : unwrapped.to_s
-
-              # Build the type string with wrappers
-              result = base_name
-              result = "[#{result}]" if list?(type)
-              result = "#{result}!" if non_null?(type)
-              result
-            elsif type.respond_to?(:graphql_name)
-              type.graphql_name
-            else
-              type.to_s
-            end
-          end
-        end
-
-        def list?(type)
-          type.is_a?(GraphQL::Schema::List) ||
-            (type.respond_to?(:list?) && type.list?)
-        end
-
-        def non_null?(type)
-          type.is_a?(GraphQL::Schema::NonNull) ||
-            (type.respond_to?(:non_null?) && type.non_null?)
-        end
       end
 
       # Matcher for checking if a schema has a specific query field
@@ -405,41 +388,6 @@ module Zenspec
 
           type = field.type
           type_to_string(type)
-        end
-
-        def type_to_string(type)
-          case type
-          when GraphQL::Schema::NonNull
-            "#{type_to_string(type.of_type)}!"
-          when GraphQL::Schema::List
-            "[#{type_to_string(type.of_type)}]"
-          when GraphQL::Schema::Member
-            type.graphql_name
-          else
-            if type.respond_to?(:unwrap)
-              unwrapped = type.unwrap
-              base_name = unwrapped.respond_to?(:graphql_name) ? unwrapped.graphql_name : unwrapped.to_s
-
-              result = base_name
-              result = "[#{result}]" if list?(type)
-              result = "#{result}!" if non_null?(type)
-              result
-            elsif type.respond_to?(:graphql_name)
-              type.graphql_name
-            else
-              type.to_s
-            end
-          end
-        end
-
-        def list?(type)
-          type.is_a?(GraphQL::Schema::List) ||
-            (type.respond_to?(:list?) && type.list?)
-        end
-
-        def non_null?(type)
-          type.is_a?(GraphQL::Schema::NonNull) ||
-            (type.respond_to?(:non_null?) && type.non_null?)
         end
 
         def check_argument(arg_name, expected_type)
@@ -527,41 +475,6 @@ module Zenspec
 
           type = field.type
           type_to_string(type)
-        end
-
-        def type_to_string(type)
-          case type
-          when GraphQL::Schema::NonNull
-            "#{type_to_string(type.of_type)}!"
-          when GraphQL::Schema::List
-            "[#{type_to_string(type.of_type)}]"
-          when GraphQL::Schema::Member
-            type.graphql_name
-          else
-            if type.respond_to?(:unwrap)
-              unwrapped = type.unwrap
-              base_name = unwrapped.respond_to?(:graphql_name) ? unwrapped.graphql_name : unwrapped.to_s
-
-              result = base_name
-              result = "[#{result}]" if list?(type)
-              result = "#{result}!" if non_null?(type)
-              result
-            elsif type.respond_to?(:graphql_name)
-              type.graphql_name
-            else
-              type.to_s
-            end
-          end
-        end
-
-        def list?(type)
-          type.is_a?(GraphQL::Schema::List) ||
-            (type.respond_to?(:list?) && type.list?)
-        end
-
-        def non_null?(type)
-          type.is_a?(GraphQL::Schema::NonNull) ||
-            (type.respond_to?(:non_null?) && type.non_null?)
         end
 
         def check_argument(arg_name, expected_type)

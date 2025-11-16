@@ -18,7 +18,7 @@ module Zenspec
           @result = get_result(actual)
           return false if @result.failure?
 
-          return false if @expected_data && @result.data != @expected_data
+          return false if !@expected_data.nil? && @result.data != @expected_data
 
           if @context_checks
             @context_checks.all? do |key, value|
