@@ -5,6 +5,61 @@ require "rspec/expectations"
 module Zenspec
   module Matchers
     module GraphQLTypeMatchers
+      # Helper module for field name conversion
+      module FieldNameHelper
+        # Convert snake_case to camelCase for GraphQL field lookup
+        # GraphQL-Ruby automatically converts snake_case field definitions to camelCase
+        def camelize(name)
+          name.to_s.split("_").map.with_index { |word, i| i.zero? ? word : word.capitalize }.join
+        end
+
+        # Try to get a field by name, attempting both the original name and camelCase version
+        def get_field_with_conversion(type, field_name)
+          field_name_str = field_name.to_s
+
+          # Try the exact name first (for backward compatibility)
+          field = get_field_exact(type, field_name_str)
+          return field if field
+
+          # Try the camelCase version if the original name contains underscores
+          if field_name_str.include?("_")
+            camel_name = camelize(field_name_str)
+            field = get_field_exact(type, camel_name)
+            return field if field
+          end
+
+          nil
+        end
+
+        def get_field_exact(type, field_name)
+          if type.respond_to?(:fields)
+            type.fields[field_name]
+          elsif type.respond_to?(:get_field)
+            type.get_field(field_name)
+          end
+        end
+
+        # Try to get an argument by name, attempting both the original name and camelCase version
+        def get_argument_with_conversion(field, arg_name)
+          return nil unless field.respond_to?(:arguments)
+
+          arg_name_str = arg_name.to_s
+
+          # Try the exact name first (for backward compatibility)
+          arg = field.arguments[arg_name_str]
+          return arg if arg
+
+          # Try the camelCase version if the original name contains underscores
+          if arg_name_str.include?("_")
+            camel_name = camelize(arg_name_str)
+            arg = field.arguments[camel_name]
+            return arg if arg
+          end
+
+          nil
+        end
+      end
+
       # Matcher for checking if a GraphQL type has a specific field with type and arguments
       #
       # @example
@@ -14,12 +69,14 @@ module Zenspec
       #   expect(UserType).to have_field(:posts).with_argument(:limit, "Int")
       #
       RSpec::Matchers.define :have_field do |field_name|
+        include FieldNameHelper
+
         match do |type|
           @field_name = field_name.to_s
           @type = type
 
           # Get the field from the type
-          @field = get_field(type, @field_name)
+          @field = get_field_with_conversion(type, @field_name)
           return false unless @field
 
           # Check field type if specified
@@ -61,14 +118,6 @@ module Zenspec
         end
 
         private
-
-        def get_field(type, field_name)
-          if type.respond_to?(:fields)
-            type.fields[field_name]
-          elsif type.respond_to?(:get_field)
-            type.get_field(field_name)
-          end
-        end
 
         def field_type_string(field)
           return nil unless field
@@ -117,7 +166,7 @@ module Zenspec
         def check_argument(arg_name, expected_type)
           return false unless @field.respond_to?(:arguments)
 
-          arg = @field.arguments[arg_name]
+          arg = get_argument_with_conversion(@field, arg_name)
           return false unless arg
 
           if expected_type
@@ -206,12 +255,14 @@ module Zenspec
       #   expect(QueryType.fields["users"]).to have_argument(:filter).of_type("UserFilterInput")
       #
       RSpec::Matchers.define :have_argument do |arg_name|
+        include FieldNameHelper
+
         match do |field|
           @field = field
           @arg_name = arg_name.to_s
 
           # Get the argument
-          @argument = get_argument(field, @arg_name)
+          @argument = get_argument_with_conversion(field, @arg_name)
           return false unless @argument
 
           # Check argument type if specified
@@ -238,12 +289,6 @@ module Zenspec
         end
 
         private
-
-        def get_argument(field, arg_name)
-          return nil unless field.respond_to?(:arguments)
-
-          field.arguments[arg_name]
-        end
 
         def argument_type_string(argument)
           return nil unless argument
@@ -297,6 +342,8 @@ module Zenspec
       #   expect(schema).to have_query(:users).of_type("[User!]!")
       #
       RSpec::Matchers.define :have_query do |query_name|
+        include FieldNameHelper
+
         match do |schema|
           @schema = schema
           @query_name = query_name.to_s
@@ -306,7 +353,7 @@ module Zenspec
           return false unless query_type
 
           # Get the field
-          @field = get_field(query_type, @query_name)
+          @field = get_field_with_conversion(query_type, @query_name)
           return false unless @field
 
           # Check field type if specified
@@ -353,14 +400,6 @@ module Zenspec
           schema.respond_to?(:query) ? schema.query : nil
         end
 
-        def get_field(type, field_name)
-          if type.respond_to?(:fields)
-            type.fields[field_name]
-          elsif type.respond_to?(:get_field)
-            type.get_field(field_name)
-          end
-        end
-
         def field_type_string(field)
           return nil unless field
 
@@ -406,7 +445,7 @@ module Zenspec
         def check_argument(arg_name, expected_type)
           return false unless @field.respond_to?(:arguments)
 
-          arg = @field.arguments[arg_name]
+          arg = get_argument_with_conversion(@field, arg_name)
           return false unless arg
 
           if expected_type
@@ -425,6 +464,8 @@ module Zenspec
       #   expect(schema).to have_mutation(:deleteUser).of_type("DeleteUserPayload!")
       #
       RSpec::Matchers.define :have_mutation do |mutation_name|
+        include FieldNameHelper
+
         match do |schema|
           @schema = schema
           @mutation_name = mutation_name.to_s
@@ -434,7 +475,7 @@ module Zenspec
           return false unless mutation_type
 
           # Get the field
-          @field = get_field(mutation_type, @mutation_name)
+          @field = get_field_with_conversion(mutation_type, @mutation_name)
           return false unless @field
 
           # Check field type if specified
@@ -481,14 +522,6 @@ module Zenspec
           schema.respond_to?(:mutation) ? schema.mutation : nil
         end
 
-        def get_field(type, field_name)
-          if type.respond_to?(:fields)
-            type.fields[field_name]
-          elsif type.respond_to?(:get_field)
-            type.get_field(field_name)
-          end
-        end
-
         def field_type_string(field)
           return nil unless field
 
@@ -534,7 +567,7 @@ module Zenspec
         def check_argument(arg_name, expected_type)
           return false unless @field.respond_to?(:arguments)
 
-          arg = @field.arguments[arg_name]
+          arg = get_argument_with_conversion(@field, arg_name)
           return false unless arg
 
           if expected_type

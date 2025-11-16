@@ -50,6 +50,11 @@ RSpec.describe "GraphQL Type Matchers" do
     field :users, [TypeMatcherUser], null: false do
       argument :limit, Integer, required: false
     end
+
+    # Snake_case field definition (GraphQL-Ruby converts to camelCase)
+    field :current_user, TypeMatcherUser, null: true do
+      argument :include_posts, Boolean, required: false
+    end
   end
 
   class TypeMatcherMutation < GraphQL::Schema::Object
@@ -61,6 +66,12 @@ RSpec.describe "GraphQL Type Matchers" do
 
     field :deleteUser, Boolean, null: false do
       argument :id, ID, required: true
+    end
+
+    # Snake_case field definition (GraphQL-Ruby converts to camelCase)
+    field :update_user_status, TypeMatcherStatus, null: false do
+      argument :user_id, ID, required: true
+      argument :new_status, TypeMatcherStatus, required: true
     end
   end
 
@@ -181,6 +192,40 @@ RSpec.describe "GraphQL Type Matchers" do
 
     it "fails when schema does not have mutation" do
       expect(TypeMatcherSchema).not_to have_mutation(:nonexistent)
+    end
+  end
+
+  describe "snake_case to camelCase conversion" do
+    context "with have_query matcher" do
+      it "matches snake_case query name" do
+        expect(TypeMatcherSchema).to have_query(:current_user)
+      end
+
+      it "matches snake_case query with type" do
+        expect(TypeMatcherSchema).to have_query(:current_user).of_type("TypeMatcherUser")
+      end
+
+      it "matches snake_case query with snake_case argument" do
+        expect(TypeMatcherSchema).to have_query(:current_user)
+          .with_argument(:include_posts, "Boolean")
+      end
+    end
+
+    context "with have_mutation matcher" do
+      it "matches snake_case mutation name" do
+        expect(TypeMatcherSchema).to have_mutation(:update_user_status)
+      end
+
+      it "matches snake_case mutation with type" do
+        expect(TypeMatcherSchema).to have_mutation(:update_user_status)
+          .of_type("TypeMatcherStatus!")
+      end
+
+      it "matches snake_case mutation with snake_case arguments" do
+        expect(TypeMatcherSchema).to have_mutation(:update_user_status)
+          .with_argument(:user_id, "ID!")
+          .with_argument(:new_status, "TypeMatcherStatus!")
+      end
     end
   end
 end
