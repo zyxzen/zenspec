@@ -105,9 +105,7 @@ module Zenspec
           data = path.empty? ? result["data"] : dig_data(result["data"], path)
 
           # Check for explicit null
-          if @check_null
-            return data.nil?
-          end
+          return data.nil? if @check_null
 
           # Check for presence (not nil and not empty)
           if @check_present
@@ -117,12 +115,14 @@ module Zenspec
           # Check count for arrays
           if @expected_count
             return false unless data.is_a?(Array)
+
             return data.length == @expected_count
           end
 
           # Check for partial matching (subset)
           if @expected_match
             return false unless data.is_a?(Hash)
+
             return @expected_match.all? { |key, value| data[key.to_s] == value }
           end
 
@@ -130,21 +130,20 @@ module Zenspec
           if @expected_include
             return false unless data.is_a?(Hash) || data.is_a?(Array)
 
-            if data.is_a?(Hash)
-              return @expected_include.all? { |key, value| data[key.to_s] == value }
-            else
-              # For arrays, check if any element matches
-              return data.any? do |item|
-                item.is_a?(Hash) && @expected_include.all? { |key, value| item[key.to_s] == value }
-              end
+            return @expected_include.all? { |key, value| data[key.to_s] == value } if data.is_a?(Hash)
+
+            # For arrays, check if any element matches
+            return data.any? do |item|
+              item.is_a?(Hash) && @expected_include.all? { |key, value| item[key.to_s] == value }
             end
+
           end
 
           # Check exact value
-          unless @expected_value.nil?
-            data == @expected_value
-          else
+          if @expected_value.nil?
             !data.nil?
+          else
+            data == @expected_value
           end
         end
 
@@ -241,9 +240,7 @@ module Zenspec
             end
 
             # Check for specific message
-            if @expected_message
-              return errors.any? { |error| error["message"]&.include?(@expected_message) }
-            end
+            return errors.any? { |error| error["message"]&.include?(@expected_message) } if @expected_message
 
             # Check for specific extensions
             if @expected_extensions
@@ -254,9 +251,7 @@ module Zenspec
             end
 
             # Check for specific path
-            if @expected_path
-              return errors.any? { |error| error["path"] == @expected_path }
-            end
+            return errors.any? { |error| error["path"] == @expected_path } if @expected_path
 
             true
           end
@@ -359,6 +354,77 @@ module Zenspec
             "Data was: #{data.inspect}"
         end
       end
+
+      # Matcher for testing GraphQL field resolution directly
+      #
+      # Tests a field's resolved value by executing it with given arguments.
+      # Useful for unit testing individual field resolvers without full query execution.
+      #
+      # @example Basic field resolution
+      #   expect([UserType.fields["name"], {}]).to resolve_field_to("John Doe")
+      #   expect([QueryType.fields["currentUser"], {}]).to resolve_field_to(user)
+      #
+      # @example With arguments
+      #   expect([UserType.fields["posts"], { limit: 5 }]).to resolve_field_to(array_of_5_posts)
+      #
+      # @example With context
+      #   expect([QueryType.fields["viewer"], {}]).to resolve_field_to(user).with_context(current_user: user)
+      #
+      # @example With object (for type fields)
+      #   expect([UserType.fields["email"], {}]).to resolve_field_to("john@example.com").for_object(user)
+      #
+      RSpec::Matchers.define :resolve_field_to do |expected_value|
+        match do |(field, args)|
+          @field = field
+          @args = args || {}
+          @context ||= {}
+          @object ||= nil
+
+          @actual_value = resolve_field(field, @args, @object, @context)
+          @actual_value == expected_value
+        end
+
+        chain :with_context do |context|
+          @context = context
+        end
+
+        chain :for_object do |object|
+          @object = object
+        end
+
+        chain :with_arguments do |args|
+          @args = args
+        end
+
+        failure_message do
+          field_name = @field.respond_to?(:name) ? @field.name : @field.to_s
+          message = "expected field #{field_name.inspect} to resolve to #{expected_value.inspect}, " \
+                    "but got #{@actual_value.inspect}"
+          message += "\n  with arguments: #{@args.inspect}" unless @args.empty?
+          message += "\n  with context: #{@context.inspect}" unless @context.empty?
+          message += "\n  for object: #{@object.inspect}" if @object
+          message
+        end
+
+        def resolve_field(field, args, object, context)
+          return nil unless field
+
+          # Handle different GraphQL-Ruby versions
+          if field.respond_to?(:resolve)
+            # Call the field's resolve method
+            field.resolve(object, args, context)
+          elsif field.respond_to?(:resolve_field)
+            field.resolve_field(object, args, context)
+          else
+            # Fallback: try to call the method on the object
+            method_name = field.respond_to?(:method_name) ? field.method_name : field.name
+            object.respond_to?(method_name) ? object.public_send(method_name) : nil
+          end
+        end
+      end
+
+      # Alias for more natural reading
+      RSpec::Matchers.alias_matcher :return_field_value, :resolve_field_to
     end
   end
 end

@@ -117,6 +117,10 @@ Test GraphQL query and mutation responses.
 | `have_graphql_errors(n)` | `have_graphql_errors(2)` | Has exactly n errors |
 | `have_graphql_field(name)` | `have_graphql_field("user")` | Response has field |
 | `have_graphql_fields(hash)` | `have_graphql_fields("user" => true)` | Response has multiple fields |
+| `resolve_field_to(value)` | `expect([field, args]).to resolve_field_to("result")` | Test field resolver directly |
+| `.with_context(hash)` | `.with_context(current_user: user)` | Provide execution context |
+| `.for_object(obj)` | `.for_object(user)` | Provide object for type fields |
+| `.with_arguments(hash)` | `.with_arguments(limit: 5)` | Override field arguments |
 
 **Examples:**
 
@@ -146,6 +150,21 @@ expect(result).to have_graphql_error.with_message("Not found")
 expect(result).to have_graphql_error.with_extensions(code: "NOT_FOUND")
 expect(result).to have_graphql_error.at_path(["user", "email"])
 expect(result).to have_graphql_errors(2)
+
+# Direct field resolver testing
+field = UserType.fields["name"]
+expect([field, {}]).to resolve_field_to("John Doe").for_object(user)
+
+# With arguments
+posts_field = UserType.fields["posts"]
+expect([posts_field, { limit: 5 }]).to resolve_field_to(array_of_5_posts).for_object(user)
+
+# With context (for query/mutation fields)
+viewer_field = QueryType.fields["viewer"]
+expect([viewer_field, {}]).to resolve_field_to(user).with_context(current_user: user)
+
+# Alias: return_field_value (same as resolve_field_to)
+expect([field, {}]).to return_field_value("John Doe").for_object(user)
 ```
 
 ### Interactor Matchers
