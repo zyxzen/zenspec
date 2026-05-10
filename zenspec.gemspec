@@ -35,5 +35,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "graphql", "~> 2.5"
   spec.add_dependency "interactor", "~> 3.0"
   spec.add_dependency "rspec", "~> 3.0"
-  spec.add_dependency "shoulda-matchers", "~> 6.0"
+  spec.add_dependency "shoulda-matchers", "~> 7.0"
 end
