@@ -175,7 +175,9 @@ Test your Interactor service objects.
 |---------|-------|-------------|
 | `succeed` | `expect(result).to succeed` | Interactor succeeded |
 | `.with_context(key, value)` | `.with_context(:user, user)` | Check context value |
-| `.with_data(value)` | `.with_data(user)` | Check context.data value |
+| `.with_data(value)` | `.with_data(user)` | Check `context.data` value (exact equality) |
+| `.with_data_type(Klass)` | `.with_data_type(User)` | Check `context.data.is_a?(Klass)` |
+| `.with_persisted_data` | `.with_persisted_data` | `context.data` is a present, persisted record |
 | `fail_interactor` | `expect(result).to fail_interactor` | Interactor failed |
 | `.with_error(code)` | `.with_error("not_found")` | Failed with specific error code |
 | `.with_errors(*codes)` | `.with_errors("invalid", "missing")` | Failed with multiple error codes |
@@ -183,6 +185,8 @@ Test your Interactor service objects.
 | `set_context(key, value)` | `set_context(:user, user)` | Context key set to value |
 | `have_error_code(code)` | `have_error_code("not_found")` | Has specific error code |
 | `have_error_codes(*codes)` | `have_error_codes("a", "b")` | Has multiple error codes |
+| `destroy_record(record)` | `expect(result).to destroy_record(post)` | Record was destroyed (or no longer exists) |
+| `update_record(record).with(attrs)` | `update_record(post).with(title: "new")` | Reloads record and checks attributes |
 
 **Examples:**
 
@@ -191,6 +195,8 @@ Test your Interactor service objects.
 expect(result).to succeed
 expect(result).to succeed.with_context(:user, kind_of(User))
 expect(result).to succeed.with_data(user)
+expect(result).to succeed.with_data_type(User)
+expect(result).to succeed.with_persisted_data
 expect(result).to set_context(:user)
 
 # Failure checks
@@ -199,6 +205,10 @@ expect(result).to fail_interactor.with_error("validation_failed")
 expect(result).to fail_interactor.with_errors("invalid_email", "missing_name")
 expect(result).to have_error_code("not_found")
 expect(result).to have_error_codes("invalid", "missing")
+
+# Record side-effect checks
+expect(result).to destroy_record(post)
+expect(result).to update_record(user).with(name: "Jane", is_active: true)
 ```
 
 ### GraphQL Helpers
@@ -451,9 +461,27 @@ RSpec.describe UpdateUser do
   it { is_expected.to succeed.with_context(:user, user) }
   it { is_expected.to succeed.with_data(user) }
 
-  it "updates the user's name" do
-    expect { result }.to change { user.reload.name }.from("Old Name").to("New Name")
-  end
+  # Reload + assert attributes in one matcher
+  it { is_expected.to update_record(user).with(name: "New Name") }
+end
+
+RSpec.describe CreatePost do
+  subject(:result) { described_class.call(title: "Hello") }
+
+  # Assert the interactor succeeded and returned a persisted record
+  it { is_expected.to succeed.with_persisted_data }
+
+  # Or assert the data is the right type without caring about persistence
+  it { is_expected.to succeed.with_data_type(Post) }
+end
+
+RSpec.describe DestroyPost do
+  subject(:result) { described_class.call(post: post) }
+
+  let!(:post) { create(:post) }
+
+  it { is_expected.to succeed }
+  it { is_expected.to destroy_record(post) }
 end
 ```
 

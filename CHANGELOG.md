@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-14
+
+### Added
+- `succeed.with_persisted_data` chain — asserts the interactor succeeded and `context.data` is a present, persisted ActiveRecord record
+- `succeed.with_data_type(Klass)` chain — asserts the interactor succeeded and `context.data.is_a?(Klass)`
+- `destroy_record(record)` matcher — asserts the given record has been destroyed (either `record.destroyed?` is true or `record.class.exists?(record.id)` is false)
+- `update_record(record).with(attrs)` matcher — reloads the record and asserts the given attributes match, with a failure message listing each mismatched attribute
+
 ## [0.3.1] - 2025-11-16
 
 ### Fixed

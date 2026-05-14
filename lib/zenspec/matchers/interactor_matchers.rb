@@ -10,6 +10,8 @@ module Zenspec
       # @example
       #   expect(result).to succeed
       #   expect(result).to succeed.with_data(expected_value)
+      #   expect(result).to succeed.with_data_type(SomeClass)
+      #   expect(result).to succeed.with_persisted_data
       #   expect(result).to succeed.with_context(:key, value)
       #   expect(MyInteractor).to succeed.with_context(:user, user)
       #
@@ -19,6 +21,13 @@ module Zenspec
           return false if @result.failure?
 
           return false if !@expected_data.nil? && @result.data != @expected_data
+
+          if @check_persisted_data
+            @persisted_failure = persisted_data_failure(@result.data)
+            return false if @persisted_failure
+          end
+
+          return false if @expected_data_type && !@result.data.is_a?(@expected_data_type)
 
           if @context_checks
             @context_checks.all? do |key, value|
@@ -33,6 +42,14 @@ module Zenspec
           @expected_data = expected_data
         end
 
+        chain :with_data_type do |expected_type|
+          @expected_data_type = expected_type
+        end
+
+        chain :with_persisted_data do
+          @check_persisted_data = true
+        end
+
         chain :with_context do |key, value|
           @context_checks ||= {}
           @context_checks[key] = value
@@ -43,19 +60,33 @@ module Zenspec
             "expected interactor to succeed, but it failed with errors: #{@result.errors}"
           elsif @expected_data && @result.data != @expected_data
             "expected data to be #{@expected_data.inspect}, got #{@result.data.inspect}"
+          elsif @check_persisted_data && @persisted_failure
+            @persisted_failure
+          elsif @expected_data_type && !@result.data.is_a?(@expected_data_type)
+            "expected data to be a kind of #{@expected_data_type}, got #{@result.data.class} (#{@result.data.inspect})"
           elsif @context_checks
             failed_checks = @context_checks.reject { |key, value| @result.public_send(key) == value }
             "expected context to match #{@context_checks.inspect}, but #{failed_checks.inspect} did not match"
           end
         end
 
-        private
-
         def get_result(actual)
           if actual.is_a?(Class) && actual.ancestors.include?(Interactor)
             actual.call
           else
             actual
+          end
+        end
+
+        def persisted_data_failure(data)
+          if data.nil?
+            "expected context.data to be a persisted record, but it was nil"
+          elsif data.respond_to?(:present?) && !data.present?
+            "expected context.data to be a persisted record, but it was blank: #{data.inspect}"
+          elsif !data.respond_to?(:persisted?)
+            "expected context.data to respond to :persisted?, got #{data.class} (#{data.inspect})"
+          elsif !data.persisted?
+            "expected context.data to be persisted, but #{data.inspect} was not"
           end
         end
       end
@@ -205,6 +236,82 @@ module Zenspec
           else
             "expected context[#{key.inspect}] to be set"
           end
+        end
+      end
+
+      # Matcher for checking that an ActiveRecord record has been destroyed
+      #
+      # Passes when either +record.destroyed?+ is true, or
+      # +record.class.exists?(record.id)+ returns false.
+      #
+      # @example
+      #   expect(result).to destroy_record(record)
+      #   expect(MyDestroyInteractor).to destroy_record(record)
+      #
+      RSpec::Matchers.define :destroy_record do |record|
+        match do |actual|
+          actual.call if actual.is_a?(Class) && actual.ancestors.include?(Interactor)
+
+          record_destroyed?(record)
+        end
+
+        match_when_negated do |actual|
+          actual.call if actual.is_a?(Class) && actual.ancestors.include?(Interactor)
+
+          !record_destroyed?(record)
+        end
+
+        failure_message do
+          "expected #{record.inspect} to be destroyed, but it still exists"
+        end
+
+        failure_message_when_negated do
+          "expected #{record.inspect} not to be destroyed, but it was"
+        end
+
+        def record_destroyed?(record)
+          return true if record.respond_to?(:destroyed?) && record.destroyed?
+          return true if record.class.respond_to?(:exists?) && !record.class.exists?(record.id)
+
+          false
+        end
+      end
+
+      # Matcher for checking that an ActiveRecord record has been updated with
+      # the given attributes after the interactor runs.
+      #
+      # @example
+      #   expect(result).to update_record(record).with(name: "new", is_active: true)
+      #   expect(MyUpdateInteractor).to update_record(record).with(name: "new")
+      #
+      RSpec::Matchers.define :update_record do |record|
+        match do |actual|
+          actual.call if actual.is_a?(Class) && actual.ancestors.include?(Interactor)
+
+          record.reload if record.respond_to?(:reload)
+
+          @expected_attrs ||= {}
+          @mismatches = @expected_attrs.each_with_object({}) do |(key, expected), memo|
+            actual_value = record.public_send(key)
+            memo[key] = { expected: expected, actual: actual_value } if actual_value != expected
+          end
+
+          @mismatches.empty?
+        end
+
+        chain :with do |expected_attrs|
+          @expected_attrs = expected_attrs
+        end
+
+        failure_message do
+          details = @mismatches.map do |key, values|
+            "#{key}: expected #{values[:expected].inspect}, got #{values[:actual].inspect}"
+          end.join("; ")
+          "expected #{record.inspect} to be updated with #{@expected_attrs.inspect}, but #{details}"
+        end
+
+        failure_message_when_negated do
+          "expected #{record.inspect} not to be updated with #{@expected_attrs.inspect}, but it was"
         end
       end
     end
